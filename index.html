@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Responsive Grid — Viewport Screenshot</title>
+  <style>
+    :root {
+      /* Defaults: Mobile */
+      --columns: 4;
+      --gutter: 16px;
+      --margin: 16px;
+      --container-max: 100%;
+      --bg: #0c1116;
+      --col-bg: rgba(154, 230, 180, 0.10);
+      --col-border: rgba(154, 230, 180, 0.40);
+      --panel-bg: rgba(15, 23, 32, 0.9);
+      --panel-border: rgba(154, 230, 180, 0.35);
+      --text: #e6edf3;
+      --muted: #9fb0c0;
+      --focus: rgba(154, 230, 180, 0.65);
+      --ok: #9ae6b4;
+      --warn: #fbd38d;
+    }
+
+    @media (min-width: 768px) {
+      :root {
+        --columns: 8;
+        --gutter: 24px;
+        --margin: 32px;
+        --container-max: 100%;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      :root {
+        --columns: 12;
+        --gutter: 32px;
+        --margin: 16px;
+        --container-max: 1504px; /* Desktop cap */
+      }
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+    }
+
+    /* Grid container with left/right margins applied */
+    .container {
+      position: relative;
+      width: calc(100% - (var(--margin) * 2));
+      max-width: calc(var(--container-max) - (var(--margin) * 2));
+      margin: 0 auto;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: repeat(var(--columns), 1fr);
+      column-gap: var(--gutter);
+    }
+
+    .col {
+      background: var(--col-bg);
+      border: 1px dashed var(--col-border);
+      border-radius: 6px;
+      min-height: 60px;
+    }
+
+    /* Floating utility panel */
+    .panel {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      z-index: 9999;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+      font-size: 13px;
+      backdrop-filter: blur(8px) saturate(1.1);
+    }
+    .panel .dims{
+      color: var(--muted);
+      white-space: nowrap;
+      min-width: 110px;
+      text-align: right;
+    }
+    .panel button{
+      appearance: none;
+      cursor: pointer;
+      border: 1px solid var(--panel-border);
+      background: #0f1720;
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+      touch-action: manipulation;
+    }
+    .panel button[disabled]{
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .panel button:focus{ outline: 2px solid var(--focus); outline-offset: 2px; }
+    .panel .sep{ width: 1px; height: 18px; background: var(--panel-border); }
+    .status { font-size: 12px; color: var(--warn); }
+    .status.ok { color: var(--ok); }
+  </style>
+</head>
+<body>
+  <!-- Grid -->
+  <div class="container" id="grid" aria-label="Grid columns"></div>
+
+  <!-- Panel (included in screenshot) -->
+  <div class="panel" id="panel" role="region" aria-label="Utilities">
+    <span class="dims" id="dims">–</span>
+    <div class="sep" aria-hidden="true"></div>
+    <button id="shotBtn" type="button" title="Take a screenshot" disabled>Take Screenshot</button>
+    <span id="status" class="status">Loading capture engine…</span>
+  </div>
+
+  <script>
+    // Build the grid columns
+    (function(){
+      const grid = document.getElementById('grid');
+      const dims = document.getElementById('dims');
+      const shotBtn = document.getElementById('shotBtn');
+      const statusEl = document.getElementById('status');
+
+      function cssVar(name){
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function buildColumns(){
+        grid.innerHTML = '';
+        const colsCount = parseInt(cssVar('--columns'), 10) || 4;
+        for(let i = 0; i < colsCount; i++){
+          const col = document.createElement('div');
+          col.className = 'col';
+          grid.appendChild(col);
+        }
+      }
+
+      function updateDims(){
+        const w = Math.round(window.innerWidth);
+        const h = Math.round(window.innerHeight);
+        dims.textContent = w + ' × ' + h + 'px';
+      }
+
+      function enableButton(){
+        shotBtn.disabled = false;
+        statusEl.textContent = 'Ready';
+        statusEl.classList.add('ok');
+      }
+
+      async function ensureHtml2Canvas(){
+        if (window.html2canvas) return true;
+
+        // Try to inject jsDelivr first
+        const trySrcs = [
+          'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+          'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+        ];
+
+        for(const src of trySrcs){
+          try{
+            await new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = src;
+              s.async = true;
+              s.onload = resolve;
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+            if (window.html2canvas) return true;
+          }catch(e){
+            // Continue to next source
+          }
+        }
+        return !!window.html2canvas;
+      }
+
+      async function takeScreenshot(){
+        const ok = await ensureHtml2Canvas();
+        if(!ok){
+          statusEl.textContent = 'Capture engine failed to load. Check connection.';
+          statusEl.classList.remove('ok');
+          return;
+        }
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const canvas = await window.html2canvas(document.body, {
+          backgroundColor: getComputedStyle(document.body).backgroundColor,
+          scale: dpr,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          windowWidth: document.documentElement.scrollWidth,
+          windowHeight: document.documentElement.scrollHeight
+        });
+
+        const w = Math.round(window.innerWidth);
+        const h = Math.round(window.innerHeight);
+        canvas.toBlob((blob) => {
+          if(!blob){
+            const data = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = data;
+            a.download = `viewport_${w}x${h}.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `viewport_${w}x${h}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, 'image/png');
+      }
+
+      // Init
+      buildColumns();
+      updateDims();
+      window.addEventListener('resize', () => {
+        buildColumns();
+        updateDims();
+      });
+
+      // Preload html2canvas and then enable the button
+      ensureHtml2Canvas().then(ok => {
+        if(ok) enableButton();
+        else {
+          statusEl.textContent = 'Offline? Click to retry.';
+          statusEl.classList.remove('ok');
+        }
+      });
+
+      shotBtn.addEventListener('click', takeScreenshot, {passive: true});
+      statusEl.addEventListener('click', async () => {
+        statusEl.textContent = 'Retrying…';
+        const ok = await ensureHtml2Canvas();
+        if(ok) enableButton();
+        else statusEl.textContent = 'Still offline. Try again.';
+      });
+    })();
+  </script>
+</body>
+</html>
